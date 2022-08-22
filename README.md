@@ -38,10 +38,10 @@ Usually, one would like to compare the performance of FCS/FCGan using the derive
 
 Please clone the [FCS-sample-production](https://gitlab.cern.ch/jbeirer/FCS-sample-production) repository. We will be needed what is located within the ```GridProduction/``` folder.
 
-If planning to use a local copy of athena, please run the following lines from the build directory associated to such a locally compiled athena version:
+If planning to use a local copy of athena, please run the following lines from the build directory associated to such a locally compiled athena version [NOTE: not tested yet in R22!]:
 
 ```
-export DESTDIR=/afs/cern.ch/user/j/jbossios/work/public/FastCaloSim/Simulate/GridProduction/FCS-sample-production/LocalAthenaDir/usr/WorkDir/21.0.130
+export DESTDIR=/afs/cern.ch/user/j/jbossios/work/public/FastCaloSim/R22_xAODproduction/FCS-sample-production/LocalAthenaDir/usr/WorkDir/
 make && make -k install/fast
 ```
 
@@ -51,7 +51,7 @@ runSimGrid.py
 launchSimGrid.py
 Setup.sh
 
-Then, copy the ```runGrid_FCS_NTUP_G4FastCalo.sh``` to the ```GridProduction/FCS-sample-production/GridProduction/simFlavours/``` folder of the FCS-sample-production package.
+Then, copy the ```runGrid_Run3_FullG4MT.sh``` to the ```FCS-sample-production/GridProduction/simFlavours/``` folder of the FCS-sample-production package.
 
 Run the setup script:
 
@@ -65,10 +65,17 @@ Finally, in the ```launchSimGrid.py``` script, provide your CERN username with t
 python launchSimGrid.py
 ```
 
+For merging xAODs, copy the ```merge_Jona.py``` script to the ```GridProduction/helperScripts``` folder and run it (after updating it as needed).
+
 ### Make plots
 
 Clone the [CompareSimulations21](https://gitlab.cern.ch/atlas-simulation-fastcalosim/CompareSimulations21) repository and follow instructions therein.
 
-Copy the following files from the ```scripts_to_make_plots/``` folder in this repository to the ```run/``` directory of the ```CompareSimulations21``` package.
+Copy the following files from the ```scripts_to_make_plots/``` folder in this repository to the ```run/``` directory of the ```CompareSimulations21``` package:
+
+```
+create_configs.py
+run_Jona.py
+```
 
 From the ```run/``` directory, create the necessary configuration files with the ```create_configs.py``` script and produce plots with the ```run_Jona.py``` script.
