@@ -1,3 +1,3 @@
 setupATLAS
-lsetup "asetup Athena,21.0.130" panda
+lsetup "asetup Athena,22.0.79" panda
 voms-proxy-init -voms atlas
