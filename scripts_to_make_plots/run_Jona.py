@@ -3,7 +3,7 @@ import os
 import sys
 
 from CompareSimulations import readxAOD, plotConfig
-from CompareSimulations.compare_simulations import plot
+from CompareSimulations.compare_simulations import plot, ROOT
 from CompareSimulations import hutils
 
 parser = argparse.ArgumentParser()
@@ -13,6 +13,8 @@ args = parser.parse_args()
 if not args.config:
   print('ERROR: no config file was provided, exiting')
   sys.exit(1)
+
+plot_set = 'all'
 
 ##############################################################################
 # DO NOT MODIFY (below this line)
@@ -81,7 +83,6 @@ for particle in particles:
         # they will all be put into one flatTTree
         # padding value gets used if for some reason an event produced no data
         # (say an event with 0 jets)
-        import ROOT
         readxAOD.ProcessFile(
           filepath,
           sample_type = plural_particle,
@@ -109,6 +110,8 @@ for particle in particles:
           FilePath = sim_dict['metadata']['flatTTree_location'],
           **sim_dict,
         )
+
+      plotEnv.global_inputs['Filter'] = plot_set
 
       # the second argument can be a list of strings if multiple formats are wanted.
       # see https://gitlab.cern.ch/hdayhall/CompareSimulations21/-/blob/henry-rel22-dev/CompareSimulations/compare_simulations.py#L882
