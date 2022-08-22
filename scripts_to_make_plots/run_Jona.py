@@ -1,6 +1,11 @@
 import argparse
 import os
 import sys
+
+from CompareSimulations import readxAOD, plotConfig
+from CompareSimulations.compare_simulations import plot
+from CompareSimulations import hutils
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', action='store', dest='config', default = '', help='Python config file')
 args = parser.parse_args()
@@ -8,9 +13,6 @@ args = parser.parse_args()
 if not args.config:
   print('ERROR: no config file was provided, exiting')
   sys.exit(1)
-
-LargeJetCollectionName = 'AntiKt10LCTopoJets2'
-JetCollectionName      = 'AntiKt4EMPFlowJets AntiKt4LCTopoJets'
 
 ##############################################################################
 # DO NOT MODIFY (below this line)
@@ -20,61 +22,95 @@ JetCollectionName      = 'AntiKt4EMPFlowJets AntiKt4LCTopoJets'
 sys.path.append('Configs/')
 cfg = __import__(args.config.replace('.py',''))
 
-Version   = cfg.Version
-Particles = cfg.Particles.split(' ')
-Energies  = cfg.Energies.split(' ')
-Etas      = cfg.Etas.split(' ')
+particles = cfg.Particles.split(' ')
+energies = cfg.Energies.split(' ')
+etas = cfg.Etas.split(' ')
 
-commands = []
 # Loop over particles
-for particle in Particles:
+for particle in particles:
+
+  # Protection
+  plural_particle = particle if particle.endswith('s') else particle + 's'
+
   # Loop over energies
-  for energy in Energies:
+  for energy in energies:
     # Loop over etas
-    for eta in Etas:
-      etaUp               = int(eta) + 5
-      DSID                = '{}_E{}_eta{}_z0'.format(particle,energy,eta)
+    for eta in etas:
+      eta = int(eta)
+      eta_up = eta + 5
+
+      # Need a DSID of the form <particle>_E<energy>_eta_<eta_range>_z<zv>
+      DSID = hutils.dsid.make_DSID(
+        plural_particle,
+        energy,
+        eta_range=(eta, eta_up),
+        zv = 0,
+      )
       print('INFO: running on DID: {}'.format(DSID))
-      flatTTreeFolderName = '{}/TTrees/{}'.format(cfg.OutputPATH,Version)
+
       # Protection
       nKeys = len(cfg.Simulations2Compare.keys())
       if nKeys < 2 or nKeys > 3:
         print('ERROR: only 2 or 3 can be compared, a comparison with {} simulation(s) is not supported, exiting'.format(nKeys))
-	sys.exit(1)
-      # Loop over simulations to compare
-      commands.append('export release="{}"'.format(Version))
-      commands.append('export largeJetCollectionName="{}"'.format(LargeJetCollectionName))
-      commands.append('export jetCollectionName="{}"'.format(JetCollectionName))
-      for SimName, Dict in cfg.Simulations2Compare.items():
-        inputFiles = '{}{}'.format(Dict['InputPath'], Dict['FileName'])
-	outdir     = '{}/{}'.format(SimName,DSID)
-	commands.append('mkdir -p {}'.format(outdir))
-	outdir     = '{}/{}/{}/data-comparisonInput'.format(flatTTreeFolderName,SimName,DSID)
-	commands.append('mkdir -p {}'.format(outdir))
-        commands.append('export inputFiles={}{}'.format(Dict['InputPath'], Dict['FileName']))
-        commands.append('export outdir={}/{}'.format(SimName,DSID))
-	commands.append('. ./run.sh')
-	commands.append('cp {0}/{1}/data-comparisonInput/{2}.root {3}/{1}.root'.format(SimName,DSID,Dict['InputPath'].split('/')[-2],outdir))
-      # Create .env file
-      envName = '{}/config_{}.env'.format(os.getcwd(),Version)
-      envFile = open(envName,'w')
-      counter = 1
-      for SimName, Dict in cfg.Simulations2Compare.items():
-        SimIndex = {1 : 'First', 2 : 'Second', 3 : 'Third'}[counter]
-        envFile.write('{}SimName: {}\n'.format(SimIndex,SimName))
-        for key, value in Dict.items():
-          if key != 'InputPath' and key != 'FileName':
-            envFile.write('{}Sim_{}: {}\n'.format(SimIndex, key, value))
-        counter += 1
-      envFile.write('outputDir: {}/Plots/{}/\n'.format(cfg.OutputPATH,Version))
-      envFile.write('inputDir: {}/TTrees/{}/\n'.format(cfg.OutputPATH,Version))
-      envFile.write('HistoDefinitionXML: {}\n'.format(cfg.HistoDefinitionXML.replace('PARTICLE',particle)))
-      envFile.write('ShowMeanInLegend: {}\n'.format('True' if cfg.ShowMeanInLegend else 'False'))
-      useThirdSim    = 'True' if nKeys == 3         else 'False'
-      useTreeInputs  = 'True' if cfg.UseTreeInputs  else 'False'
-      saveHisto      = 'True' if cfg.SaveHisto      else 'False'
-      isFSProduction = 'True' if cfg.IsFSProduction else 'False'
-      commands.append('runCompare_Simulations {} {} {} {} {} {} output.root'.format(DSID,envName,useThirdSim,useTreeInputs,saveHisto,isFSProduction))
-command = ' && '.join(commands)+' &'
-print(command)
-os.system(command)
+        sys.exit(1)
+
+      # Base path to write to
+      base_dir = cfg.OutputPATH + args.config.replace('config_Jona', '').replace('.py', '')
+
+      for sim_name, sim_dict in cfg.Simulations2Compare.items():
+
+        # get the location of the xAOD now
+        filepath = os.path.join(sim_dict['InputPath'], sim_dict['FileName'])
+        # not strictly needed, you can run ProcessFile without it,
+        # but useful to prevent mixups later
+        smetadata = hutils.metadata.SampleMetadata(
+          particle_content = plural_particle,
+          simulation_type = sim_name,
+          simulation_release = cfg.Version,
+          energy = energy,
+          eta_range = (eta, eta_up),
+          xAOD_location = filepath,
+          base_dir = base_dir,
+          notes = [sim_dict['Legend']],
+        )
+        # it will appear on a canvas in the flatTTree.root file
+        sim_dict["metadata"] = smetadata
+
+        # This takes the xAOD and writes the flatTTree to disk.
+        # if you have multiple xAOD's then filepath should be a list of strings,
+        # they will all be put into one flatTTree
+        # padding value gets used if for some reason an event produced no data
+        # (say an event with 0 jets)
+        import ROOT
+        readxAOD.ProcessFile(
+          filepath,
+          sample_type = plural_particle,
+          padding_value = ROOT.TMath.QuietNaN(),
+          sample_metadata = smetadata,
+        )
+
+      # Create an enviroment object
+      plotEnv = plotConfig.PlotConfEnv(
+        plural_particle,
+        base_dir,
+        DSID = DSID,
+        outputDir = os.path.join(base_dir, "images"),
+        ShowMeanInLegend = cfg.ShowMeanInLegend,
+        ShowUnderOverflowInLegend = False,
+        Autoscale = True,
+      )
+
+      for sim_name, sim_dict in cfg.Simulations2Compare.items():
+        # will add Legend, Color, LineStyle, LineWidth, MarkerStyle, and MarkerSize
+        # addtional values in sim_dict will be stored, but are ignored
+        # if not given, a default range would be used
+        plotEnv.add_simulation(
+          simulation_name = sim_name,
+          FilePath = sim_dict['metadata']['flatTTree_location'],
+          **sim_dict,
+        )
+
+      # the second argument can be a list of strings if multiple formats are wanted.
+      # see https://gitlab.cern.ch/hdayhall/CompareSimulations21/-/blob/henry-rel22-dev/CompareSimulations/compare_simulations.py#L882
+      # for all possibilities
+      plot(plotEnv, 'pdf')
