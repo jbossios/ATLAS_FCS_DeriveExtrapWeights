@@ -14,7 +14,7 @@ if not args.config:
   print('ERROR: no config file was provided, exiting')
   sys.exit(1)
 
-plot_set = 'all'
+plot_set = ''
 
 ##############################################################################
 # DO NOT MODIFY (below this line)
@@ -99,6 +99,7 @@ for particle in particles:
         ShowMeanInLegend = cfg.ShowMeanInLegend,
         ShowUnderOverflowInLegend = False,
         Autoscale = True,
+        Filter = plot_set,
       )
 
       for sim_name, sim_dict in cfg.Simulations2Compare.items():
@@ -110,8 +111,6 @@ for particle in particles:
           FilePath = sim_dict['metadata']['flatTTree_location'],
           **sim_dict,
         )
-
-      plotEnv.global_inputs['Filter'] = plot_set
 
       # the second argument can be a list of strings if multiple formats are wanted.
       # see https://gitlab.cern.ch/hdayhall/CompareSimulations21/-/blob/henry-rel22-dev/CompareSimulations/compare_simulations.py#L882
